@@ -103,6 +103,10 @@ func Open(path string) (*Store, error) {
 
 func (s *Store) State() *State { return s.state }
 
+// Commit leaves the file and in-memory state unchanged if any step through the
+// atomic rename fails. Once rename succeeds, next is the committed state. The
+// following directory sync is best-effort because the rename has already selected
+// the new file and returning an error would leave disk and memory inconsistent.
 func (s *Store) Commit(next *State) error {
 	b, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
@@ -138,18 +142,12 @@ func (s *Store) Commit(next *State) error {
 	if err = os.Rename(tmp, s.path); err != nil {
 		return err
 	}
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	if err = d.Sync(); err != nil {
-		d.Close()
-		return err
-	}
-	if err = d.Close(); err != nil {
-		return err
-	}
 	ok = true
 	s.state = next
+	d, err := os.Open(dir)
+	if err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
 	return nil
 }
