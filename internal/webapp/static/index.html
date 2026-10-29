@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2f7f7">
+  <title>Supplier Catalog</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#catalog" aria-label="Supplier Catalog home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M5 8.5 16 3l11 5.5v15L16 29 5 23.5v-15Z"/><path d="m5 8.5 11 5.7 11-5.7M16 14.2V29"/></svg>
+        <span><strong>Supplier Catalog</strong><small>Demo workspace</small></span>
+      </a>
+      <nav class="nav-list" aria-label="Workspace">
+        <button class="nav-item" data-view="catalog" type="button"><span>Catalog</span><span class="nav-count" id="catalog-count">0</span></button>
+        <button class="nav-item is-active" data-view="updates" type="button"><span>Updates</span><span class="nav-count" id="open-count" hidden>1 open</span></button>
+        <button class="nav-item" data-view="report" type="button"><span>Report</span><span class="nav-count" id="issue-count" hidden>0</span></button>
+        <button class="nav-item" data-view="guide" type="button"><span>Demo guide</span></button>
+      </nav>
+      <div class="sidebar-foot">
+        <p>One private catalog per browser session. Data persists across server restarts.</p>
+        <button class="text-button danger-text" id="reset-open" type="button">Reset this session</button>
+      </div>
+    </aside>
+    <header class="topbar">
+      <button class="icon-button menu-button" id="menu-toggle" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <span class="topbar-title" id="mobile-title">Updates</span>
+      <div class="freshness" id="freshness">Loading persisted data…</div>
+    </header>
+    <main class="sheet" id="main-content" tabindex="-1">
+      <div class="loading-state" id="loading-state" aria-live="polite"><span class="loading-bar wide"></span><span class="loading-bar"></span></div>
+      <section class="view" id="view-catalog" data-view-panel="catalog" hidden>
+        <div class="title-row"><div><div class="screen-title" role="heading" aria-level="1">Catalog</div><p id="catalog-finding">Products persisted from committed supplier batches.</p></div><button class="primary-button" data-go="updates" type="button">Start an update</button></div>
+        <div class="summary-strip" aria-label="Catalog summary"><div><span>Products</span><strong class="num" id="metric-products">0</strong></div><div><span>Active</span><strong class="num" id="metric-active">0</strong></div><div><span>Withdrawn</span><strong class="num" id="metric-withdrawn">0</strong></div><div><span>Last committed run</span><strong class="num" id="metric-run">—</strong></div></div>
+        <div class="toolbar"><label class="search-field"><span class="sr-only">Search products</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input id="catalog-search" type="search" placeholder="Search SKU or product name"></label><label class="select-field"><span class="sr-only">Filter by status</span><select id="status-filter"><option value="">All statuses</option><option value="active">Active</option><option value="withdrawn">Withdrawn</option></select></label><span class="result-count" id="catalog-result-count">0 products</span></div>
+        <div class="table-frame" id="catalog-table-frame"><table class="data-table catalog-table"><thead><tr><th>Product</th><th>Status</th><th class="num">Price</th><th class="num">Revision</th><th class="num">Updated in run</th></tr></thead><tbody id="catalog-body"></tbody></table><div class="empty-state" id="catalog-empty"><strong>No products yet</strong><p>Start the normal catalog update to create the first persisted rows.</p><button class="secondary-button" data-go="updates" type="button">Choose a scenario</button></div></div>
+      </section>
+      <section class="view" id="view-updates" data-view-panel="updates">
+        <div class="title-row"><div><h1>Updates</h1><p id="update-finding">Choose a fictional supplier feed and commit it batch by batch.</p></div><div class="title-actions"><button class="secondary-button" id="abort-button" type="button" disabled>Abort run</button><button class="primary-button" id="resume-button" type="button" disabled>Resume update</button></div></div>
+        <div class="updates-grid">
+          <section class="panel run-panel" aria-labelledby="run-heading"><div class="panel-heading"><div><h2 id="run-heading">Current checkpoint</h2><p id="run-source">No update has run in this session.</p></div><span class="status-badge neutral" id="run-status">Not started</span></div><div class="run-progress"><div class="progress-copy"><strong class="num" id="batch-progress">0 / 0</strong><span>batches committed</span></div><div class="checkpoint-strip" id="checkpoint-strip" aria-label="Batch checkpoint"></div></div><div class="last-error" id="last-error" hidden><strong>Last supplier error</strong><p></p></div><p class="run-note">The cursor moves in the same commit as products, counters, changes and issues. A partial run is never shown as complete.</p></section>
+          <section class="panel scenario-panel" aria-labelledby="scenario-heading"><div class="panel-heading"><div><h2 id="scenario-heading">New update</h2><p>Only embedded fictional feeds are available.</p></div></div><form id="start-form"><label><span>Supplier scenario</span><select id="scenario-select" required></select></label><p class="field-help" id="scenario-description"></p><label><span>Supplier-outage simulation</span><select id="outage-select"><option value="-1">No simulated outage</option></select></label><p class="field-help">This simulates a supplier outage after a committed batch. It does not simulate a process crash.</p><button class="primary-button full-button" id="start-button" type="submit">Start update</button></form></section>
+        </div>
+        <section class="counter-band" aria-labelledby="counter-heading"><div class="section-heading"><div><h2 id="counter-heading">Latest run counters</h2><p>A newly seen withdrawal counts as both created and withdrawn.</p></div></div><div class="counter-grid" id="counter-grid"></div></section>
+      </section>
+      <section class="view" id="view-report" data-view-panel="report" hidden>
+        <div class="title-row"><div><h1>Report</h1><p>Audit committed changes and records that still need attention.</p></div><label class="run-picker"><span>Selected run</span><select id="run-select"></select></label></div>
+        <div class="report-layout"><aside class="run-history" aria-labelledby="history-heading"><h2 id="history-heading">Run history</h2><div id="run-history-list"></div></aside><div class="report-content"><section class="counter-band compact" aria-labelledby="report-counter-heading"><div class="section-heading"><h2 id="report-counter-heading">Counters</h2></div><div class="counter-grid" id="report-counter-grid"></div></section><section class="audit-section" aria-labelledby="changes-heading"><div class="section-heading"><div><h2 id="changes-heading">Changes</h2><p>Before and after values from the selected run.</p></div><span id="changes-count">0 changes</span></div><div class="audit-list" id="changes-list"></div></section><section class="audit-section" aria-labelledby="issues-heading"><div class="section-heading"><div><h2 id="issues-heading">Needs attention</h2><p>Invalid records and revision conflicts are kept for human review.</p></div><span id="issues-count">0 issues</span></div><div class="audit-list" id="issues-list"></div></section></div></div>
+      </section>
+      <section class="view" id="view-guide" data-view-panel="guide" hidden>
+        <div class="title-row"><div><h1>Demo guide</h1><p>Six short workflows that show the catalog’s safety rules using real persisted state.</p></div></div>
+        <div class="guide-list"><article><h2>Normal import</h2><p>Run “Normal catalog” without an outage. Four products are created, one price changes, and A2 becomes a retained withdrawal tombstone.</p></article><article><h2>Outage and resume</h2><p>Choose “after batch 2”. The run stops incomplete at 2/3; Resume fetches only batch 3 and completes it.</p></article><article><h2>Repeat the feed</h2><p>Start “Normal catalog” again after completion. No duplicate product or change is created; four records are unchanged and two are stale.</p></article><article><h2>Out-of-order records</h2><p>Run “Repeated and out of order”. B1 remains withdrawn at revision 3 even though older active records arrive later.</p></article><article><h2>Invalid records</h2><p>Run “Invalid records”. Valid rows commit, while three validation errors and one revision conflict appear in Report.</p></article><article><h2>Missing batch</h2><p>Run “Missing final batch”. It remains incomplete at 2/3 on every Resume until the supplier delivers batch 3.</p></article></div>
+        <div class="process-note"><h2>Process restart recovery</h2><p>The browser demo exposes supplier outages only; it never terminates the shared server. To demonstrate a real application interruption, stop the server after a committed batch, start it again with the same <code>DATA_DIR</code>, and Resume. Automated tests also interrupt a separate process and reopen its JSON state.</p></div>
+      </section>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="reset-dialog"><form method="dialog"><h2>Reset this demo session?</h2><p>This removes only this browser session’s catalog, run history, changes and issues. Other sessions are untouched.</p><label><span>Type RESET to confirm</span><input id="reset-confirm" autocomplete="off"></label><div class="dialog-actions"><button class="secondary-button" value="cancel">Cancel</button><button class="danger-button" id="reset-button" value="default" type="button">Reset session</button></div></form></dialog>
+  <script src="/app.js" defer></script>
+</body>
+</html>

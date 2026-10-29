@@ -1,0 +1,10 @@
+.git
+.github
+.taste-skill
+catalog
+data
+*.json
+!go.mod
+!testdata/*.json
+!internal/webapp/feeds/*.json
+README.md

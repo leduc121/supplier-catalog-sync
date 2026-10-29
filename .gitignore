@@ -2,4 +2,7 @@
 /*.json
 *.tmp
 .catalog-*.tmp
+/data/
+/.taste-skill/
+/.agents/
 

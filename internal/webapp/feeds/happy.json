@@ -1,0 +1,5 @@
+{"total_batches":3,"batches":[
+  {"seq":1,"records":[{"sku":"A1","name":"T-shirt","price_cents":10000,"status":"active","revision":1},{"sku":"A2","name":"Jeans","price_cents":25000,"status":"active","revision":1}]},
+  {"seq":2,"records":[{"sku":"A3","name":"Jacket","price_cents":40000,"status":"active","revision":1},{"sku":"A1","name":"T-shirt","price_cents":12000,"status":"active","revision":2}]},
+  {"seq":3,"records":[{"sku":"A2","status":"withdrawn","revision":2},{"sku":"A4","name":"Cap","price_cents":8000,"status":"active","revision":1}]}
+]}

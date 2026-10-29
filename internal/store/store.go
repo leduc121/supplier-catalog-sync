@@ -9,6 +9,8 @@ import (
 	"supplier-catalog-sync/internal/domain"
 )
 
+var ErrConcurrentUpdate = errors.New("catalog changed in another request; retry")
+
 type State struct {
 	Products map[string]domain.Product `json:"products"`
 	Runs     []domain.Run              `json:"runs"`

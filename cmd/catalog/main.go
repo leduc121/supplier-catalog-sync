@@ -123,7 +123,11 @@ func setCrashHook(e *syncer.Engine, seq int) {
 		}
 	}
 }
-func finish(r domain.Run, err error, st *store.Store) int {
+func finish(r domain.Run, err error, repository syncer.Repository) int {
+	st, ok := repository.(*store.Store)
+	if !ok {
+		return fail(errors.New("CLI requires the JSON file store"))
+	}
 	printReport(st, r.ID)
 	if errors.Is(err, syncer.ErrIncomplete) {
 		fmt.Fprintln(os.Stderr, "Catalog was not damaged. Run `catalog resume` to continue.")

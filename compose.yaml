@@ -1,0 +1,52 @@
+services:
+  catalog:
+    image: ${APP_IMAGE:-supplier-catalog-sync:local}
+    build: .
+    environment:
+      PORT: "8080"
+      DATA_DIR: /data
+      PUBLIC_ORIGIN: https://${DOMAIN:?Set DOMAIN in .env}
+    expose:
+      - "8080"
+    volumes:
+      - catalog-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - backend
+
+  caddy:
+    image: caddy:2.8-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    depends_on:
+      catalog:
+        condition: service_healthy
+    networks:
+      - backend
+
+networks:
+  backend:
+
+volumes:
+  catalog-data:
+    external: true
+    name: supplier-catalog-data
+  caddy-data:
+    name: supplier-catalog-caddy-data
+  caddy-config:
+    name: supplier-catalog-caddy-config

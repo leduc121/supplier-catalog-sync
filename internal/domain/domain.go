@@ -89,15 +89,16 @@ type Counters struct {
 }
 
 type Run struct {
-	ID           int        `json:"id"`
-	Source       string     `json:"source"`
-	Status       string     `json:"status"`
-	NextSeq      int        `json:"next_seq"`
-	TotalBatches int        `json:"total_batches"`
-	StartedAt    time.Time  `json:"started_at"`
-	FinishedAt   *time.Time `json:"finished_at,omitempty"`
-	LastError    string     `json:"last_error,omitempty"`
-	Counters     Counters   `json:"counters"`
+	ID            int        `json:"id"`
+	Source        string     `json:"source"`
+	Status        string     `json:"status"`
+	NextSeq       int        `json:"next_seq"`
+	TotalBatches  int        `json:"total_batches"`
+	StartedAt     time.Time  `json:"started_at"`
+	FinishedAt    *time.Time `json:"finished_at,omitempty"`
+	LastError     string     `json:"last_error,omitempty"`
+	DemoFailAfter *int       `json:"demo_fail_after,omitempty"`
+	Counters      Counters   `json:"counters"`
 }
 
 func (r Run) BatchesDone() int { return r.NextSeq - 1 }

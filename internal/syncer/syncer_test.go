@@ -3,6 +3,8 @@ package syncer
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"supplier-catalog-sync/internal/domain"
@@ -140,6 +142,58 @@ func TestCrashCanResume(t *testing.T) {
 	if !reflect.DeepEqual(s.State().Products, clean.Store.State().Products) {
 		t.Fatal("crash recovery differs")
 	}
+}
+
+func TestSeparateProcessExitCanResume(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "catalog.json")
+	feedPath, err := filepath.Abs(filepath.Join("..", "..", "testdata", "happy.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestCrashProcessHelper$")
+	cmd.Env = append(os.Environ(), "CATALOG_CRASH_HELPER=1", "CATALOG_CRASH_DB="+db, "CATALOG_CRASH_FEED="+feedPath)
+	err = cmd.Run()
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 3 {
+		t.Fatalf("helper exit = %v", err)
+	}
+	st, err := store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	open := st.State().OpenRun()
+	if open == nil || open.Status != domain.RunRunning || open.BatchesDone() != 2 {
+		t.Fatalf("persisted run = %+v", open)
+	}
+	client, err := supplier.OpenFile(feedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := (&Engine{Store: st}).Resume(context.Background(), client)
+	if err != nil || run.Status != domain.RunCompleted {
+		t.Fatalf("resume run=%+v err=%v", run, err)
+	}
+}
+
+func TestCrashProcessHelper(t *testing.T) {
+	if os.Getenv("CATALOG_CRASH_HELPER") != "1" {
+		return
+	}
+	st, err := store.Open(os.Getenv("CATALOG_CRASH_DB"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := supplier.OpenFile(os.Getenv("CATALOG_CRASH_FEED"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := &Engine{Store: st, AfterBatch: func(seq int) {
+		if seq == 2 {
+			os.Exit(3)
+		}
+	}}
+	_, _ = engine.Start(context.Background(), "happy", client)
+	t.Fatal("helper did not exit")
 }
 func TestMissingBatchNeverCompleted(t *testing.T) {
 	e, _ := engine(t)

@@ -17,15 +17,17 @@ fictional JSON files; no network access and no live supplier account are needed.
 
 1. [Requirements and where they are covered](#requirements-and-where-they-are-covered)
 2. [Quick start](#quick-start)
-3. [Demo scenarios](#demo-scenarios)
-4. [Command reference](#command-reference)
-5. [How it works](#how-it-works)
-6. [What happens when something goes wrong](#what-happens-when-something-goes-wrong)
-7. [Project layout](#project-layout)
-8. [Assumptions](#assumptions)
-9. [Unfinished work and known limitations](#unfinished-work-and-known-limitations)
-10. [Production on AWS (not implemented)](#production-on-aws-not-implemented)
-11. [AI usage](#ai-usage)
+3. [Using the Web Dashboard](#using-the-web-dashboard)
+4. [Public deployment](#public-deployment)
+5. [Demo scenarios](#demo-scenarios)
+5. [Command reference](#command-reference)
+6. [How it works](#how-it-works)
+7. [What happens when something goes wrong](#what-happens-when-something-goes-wrong)
+8. [Project layout](#project-layout)
+9. [Assumptions](#assumptions)
+10. [Unfinished work and known limitations](#unfinished-work-and-known-limitations)
+11. [Production on AWS (not implemented)](#production-on-aws-not-implemented)
+12. [AI usage](#ai-usage)
 
 ## Requirements and where they are covered
 
@@ -51,6 +53,7 @@ Requires Go 1.22 or newer. No third-party modules.
 go test -count=1 ./...      # run all tests
 go vet ./...
 go build -o catalog ./cmd/catalog
+go build -o catalog-server ./cmd/server
 ```
 
 The `--db` flag selects the catalog file (default `catalog.json`) and goes **before** the
@@ -63,6 +66,102 @@ The catalog file is created on first use and is ignored by git.
 ./catalog --db demo.json report
 ./catalog --db demo.json products
 ```
+
+## Using the Web Dashboard
+
+The web server embeds its English-language dashboard and the four fictional feeds in one Go
+binary. It serves the UI and JSON API from the same origin. Each browser receives a securely
+generated session identifier and a separate catalog under `DATA_DIR`; no request can supply a
+filesystem path. Start it with:
+
+```sh
+PORT=8080 DATA_DIR=./data go run ./cmd/server
+```
+
+Open <http://localhost:8080> after the server starts. On a deployment, open the HTTPS URL configured
+by the operator. The navigation has four screens:
+
+- **Catalog** lists persisted products, including retained withdrawn products, and filters by text
+  or status.
+- **Updates** starts a fictional supplier feed and shows its checkpoint, status and counters.
+- **Report** selects a run and shows counters, before/after changes and **Needs attention** issues.
+- **Demo guide** summarizes the six assessor workflows and explains restart recovery.
+
+To run a normal update, open **Updates**, choose **Normal catalog** under **Supplier scenario**, leave
+**Supplier-outage simulation** at **No simulated outage**, and select **Start update**. The result is
+**Completed** at `3 / 3`: four products are created, A1 is updated and A2 is withdrawn. Open
+**Catalog** to filter by **Withdrawn**, or open **Report** and select the run to inspect **Changes**.
+
+To prove outage recovery, use a fresh or reset browser session:
+
+1. In **Updates**, choose **Normal catalog** and **After batch 2**, then select **Start update**.
+2. Confirm the status is **INCOMPLETE**, the checkpoint is `2 / 3`, and three committed products are
+   still visible in **Catalog**.
+3. Select **Resume update**. Confirm **Completed** at `3 / 3`; Catalog now contains four products and
+   A2 is **withdrawn**.
+4. In **Report**, select that run and inspect its counters and before/after **Changes**.
+
+Other demonstrations use **No simulated outage** unless stated otherwise:
+
+- Run **Normal catalog** again: no duplicate products or changes are created; the counters show four
+  **Unchanged** and two **Stale ignored** records.
+- Run **Repeated and out of order**: B1 remains **withdrawn** at revision 3 and older active records
+  do not restore it; B2 keeps its newer price.
+- Run **Invalid records**: the run is **Completed with issues**. **Report** shows four **Needs
+  attention** entries (three invalid records and one revision conflict), while valid C1 and C4 are
+  retained.
+- Run **Missing final batch**: it stays **INCOMPLETE** at `2 / 3`; selecting **Resume update** remains
+  incomplete because batch 3 is intentionally absent.
+
+Use **Reset this session**, type `RESET`, and select **Reset session** to remove only the current
+browser session's catalog, history, changes and issues. Each browser session has a separate catalog.
+The session identifier is a cookie; clearing cookies or switching browser profiles can lose access
+to the previous demo session even though its JSON file remains on the server.
+
+The UI's **Supplier-outage simulation** returns an error after a safely committed batch; it does not
+terminate the Go process. To verify a real application interruption, leave an update **INCOMPLETE**,
+restart the application container without removing its data volume, refresh the same browser, and
+select **Resume update**. The same session must still show `2 / 3` before it completes.
+
+The file store is protected by one server-wide mutex. Run exactly one server instance for a given
+`DATA_DIR`; the assessment has no distributed lock or shared database. Browser sessions and their
+catalog JSON files survive server restarts when that directory is persistent.
+
+To verify restart recovery manually, start an outage demo, stop the server, restart it with the same
+`DATA_DIR`, then use Resume in the same browser. `TestSeparateProcessExitCanResume` also terminates a
+separate process immediately after batch 2 commits, reopens the same file and resumes it.
+
+For a local container check, first provide the domain required by the production-oriented Compose
+file and create its deliberately external data volume:
+
+```sh
+cp .env.example .env
+# Edit DOMAIN and APP_IMAGE in .env.
+docker volume create supplier-catalog-data
+docker compose up --build -d
+docker compose down
+```
+
+The image is built in two stages, runs as a non-root user and stores session data in `/data`.
+`GET /healthz` returns only `{"status":"ok"}` and reveals no session data.
+
+GitHub Actions verifies formatting, vet, race tests and both binaries. It is CI automation, not a
+permanent backend host. GitHub Pages cannot run this Go server, and hosts with temporary filesystems
+are unsuitable unless persistent storage is mounted.
+
+## Public deployment
+
+Two deployment options are supported:
+
+### 1. Vercel + Neon PostgreSQL (Serverless)
+
+A single Vercel Go Serverless Function serves the embedded dashboard and JSON API under the same origin, with all durable state persisted in an external PostgreSQL database (such as Neon). Every batch update is committed atomically using optimistic locking and version checks, perfectly matching serverless execution constraints. See **[VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md)** for architecture, database migrations, Neon setup, and Vercel deployment instructions.
+
+### 2. Single-host Container (Ubuntu + Caddy)
+
+One Ubuntu server running one `catalog` container behind Caddy. Only Caddy publishes ports 80/443; session data is stored in the external Docker volume `supplier-catalog-data`. See **[DEPLOYMENT.md](DEPLOYMENT.md)** for server preparation, DNS, first deployment, update, rollback, backup, restore and verification commands.
+
+No public URL is recorded because no production credentials or domains have been pre-provisioned in this repository. Exact verification and setup steps are provided in the respective deployment guides.
 
 ## Demo scenarios
 
@@ -250,19 +349,23 @@ the number the supplier declared. Any other ending is `interrupted` or `running`
 
 ```
 cmd/catalog/            CLI: main.go (commands), print.go (status and report output)
+cmd/server/             HTTP server: configuration, timeouts and graceful shutdown
 internal/domain/        plain types: Record, Product, Run, Issue, Change, Validate
 internal/merge/         Decide(): the revision rule (pure function) + table tests
 internal/store/         one-JSON-file state with atomic Commit + tests
 internal/supplier/      Client interface and FileClient (reads a feed, can simulate an outage)
 internal/syncer/        the engine: Start, Resume, Abort, batch loop + integration tests
+internal/webapp/        session-safe HTTP API, embedded dashboard/feeds + workflow tests
 testdata/               fictional feeds: happy, dup_out_of_order, bad_records, missing_batch
 ```
 
-Tests (14): `TestDecide`; `TestCommitSurvivesReopen`, `TestCloneIndependent`,
-`TestCorruptFileNotOverwritten`; and ten integration tests in `internal/syncer`
+Tests (23): `TestDecide`; `TestCommitSurvivesReopen`, `TestCloneIndependent`,
+`TestCorruptFileNotOverwritten`; twelve tests in `internal/syncer`
 (happy path, same update twice, out of order, outage then resume equals a clean run, immediate
-outage keeps the catalog, crash then resume, missing batch, bad records, cancelled context,
-abort). Tests also pass with `-race`.
+outage keeps the catalog, in-process and separate-process crash recovery, missing batch, bad records,
+cancelled context and abort); and seven HTTP tests covering outage/resume, session isolation,
+restart persistence, concurrent starts, request security, public HTTPS origin handling and invalid
+origin configuration. Tests also pass with `-race`.
 
 ## Assumptions
 
@@ -275,6 +378,9 @@ abort). Tests also pass with `-race`.
   name and price are kept.
 - A record with a higher revision than a withdrawal is a legitimate relist.
 - Only one application process uses a catalog file at a time.
+- One web server instance owns a `DATA_DIR`; all mutable operations are serialized in that process.
+- Browser sessions are isolated by 256-bit random identifiers. Production config marks the cookies
+  `Secure`; both cookies use `SameSite=Lax`, and the session identifier is `HttpOnly`.
 - A run found in state `running` at startup means the previous process died, so it can be resumed.
 - A malformed feed (invalid JSON) is rejected before any run is created.
 - The feed path stays available and still represents the same logical update when a run is resumed.
@@ -293,11 +399,15 @@ abort). Tests also pass with `-race`.
   the middle of a write relies on atomic rename and was reasoned about, not tested with real fault
   injection or power loss.
 - **No locking:** two processes on the same file are not prevented.
+- **Single web instance:** the in-process mutex does not coordinate multiple containers. Production
+  needs PostgreSQL or another transactional shared store before horizontal scaling.
 - **Supplier client:** only a file-based fake. No HTTP client, retry or backoff, and no rate limiting.
 - **Issues:** they are tied to the run that produced them. There is no manual resolve, no
   lifecycle across runs, and no cap on how many are stored.
 - **Duplicate batch numbers in a feed** are not rejected; the first one wins.
-- No scheduler, notifications, authentication or user interface.
+- No scheduler, notifications or authenticated user accounts.
+- **Demo sessions are not user accounts:** random session cookies isolate demos, but there is no login,
+  access control, expiry cleanup or administrative session management.
 
 ## Production on AWS (not implemented)
 
@@ -325,17 +435,8 @@ flowchart LR
 
 ## AI usage
 
-I used AI tools in this assignment, as the task allows:
-
-- **Design:** I discussed the problem with Claude to understand the requirements and to
-  draft the design (revision-based merge, tombstones for withdrawn products, one commit per batch with a
-  cursor, run states). The AWS section was drafted the same way.
-- **Implementation:** I wrote a detailed specification and gave it to an AI coding agent, which generated
-  the code, tests, fixtures and a first README.
-- **Review:** I used an AI agent as an independent reviewer. It re-ran the tests and demos, tried edge
-  cases such as malformed feeds, a truncated catalog file and a changed feed total, and reported defects.
-  It found that the whole project sat in the wrong git repository and that `Store.Commit` promised more than
-  it could guarantee after the rename. Both were fixed.
-- **My part:** I chose the language constraint handling, the design decisions and scope, reviewed the
-  generated code and re-ran the tests and demos myself. I can explain the merge rule, the per-batch commit and the resume
-  logic, and I can modify them without AI.
+AI tools were used to help interpret the assessment, draft and review the Go implementation, design
+and implement the web dashboard, and generate tests and documentation. The work was checked by
+running formatting, vet, race tests, both builds, API workflows and browser inspection. I reviewed
+the resulting design decisions and can explain and modify the revision merge, tombstones, per-batch
+commit, resume cursor, session isolation and HTTP request protections.

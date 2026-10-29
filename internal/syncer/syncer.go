@@ -15,10 +15,111 @@ import (
 var ErrIncomplete = errors.New("catalog update incomplete")
 var ErrRunOpen = errors.New("an update is already open; resume or abort it")
 
+type Repository interface {
+	State() *store.State
+	Commit(*store.State) error
+}
+
 type Engine struct {
-	Store      *store.Store
-	Now        func() time.Time
-	AfterBatch func(int)
+	Store            Repository
+	Now              func() time.Time
+	AfterBatch       func(int)
+	DemoFailAfter    *int
+	ClearDemoFailure bool
+}
+
+// StartStep creates a run and applies at most one supplier batch. It is used by
+// serverless handlers so every request has bounded work and a durable cursor.
+func (e *Engine) StartStep(ctx context.Context, source string, client supplier.Client) (domain.Run, bool, error) {
+	if e.Store.State().OpenRun() != nil {
+		return domain.Run{}, false, ErrRunOpen
+	}
+	next := e.Store.State().Clone()
+	r := domain.Run{ID: next.NextRunID(), Source: source, Status: domain.RunRunning, NextSeq: 1, StartedAt: e.now()}
+	if e.DemoFailAfter != nil && *e.DemoFailAfter >= 0 {
+		value := *e.DemoFailAfter
+		r.DemoFailAfter = &value
+	}
+	next.Runs = append(next.Runs, r)
+	if err := e.Store.Commit(next); err != nil {
+		return r, false, err
+	}
+	return e.ContinueStep(ctx, client)
+}
+
+// ContinueStep fetches and commits at most one batch. Fetching happens before
+// Commit opens a database transaction, so no database lock spans supplier I/O.
+func (e *Engine) ContinueStep(ctx context.Context, client supplier.Client) (domain.Run, bool, error) {
+	open := e.Store.State().OpenRun()
+	if open == nil {
+		return domain.Run{}, false, errors.New("no update to resume")
+	}
+	runID := open.ID
+	total, err := client.TotalBatches(ctx)
+	if err != nil {
+		r, interruptErr := e.interrupt(runID, err)
+		return r, false, interruptErr
+	}
+	if open.TotalBatches != 0 && open.TotalBatches != total {
+		r, interruptErr := e.interrupt(runID, fmt.Errorf("feed total changed from %d to %d", open.TotalBatches, total))
+		return r, false, interruptErr
+	}
+	seq := open.NextSeq
+	if seq > total {
+		return e.complete(runID, total)
+	}
+	batch, err := client.FetchBatch(ctx, seq)
+	if err != nil {
+		r, interruptErr := e.interrupt(runID, err)
+		return r, false, interruptErr
+	}
+	if batch.Seq != seq {
+		r, interruptErr := e.interrupt(runID, fmt.Errorf("expected batch %d, got %d", seq, batch.Seq))
+		return r, false, interruptErr
+	}
+	next := e.Store.State().Clone()
+	r := next.RunByID(runID)
+	r.TotalBatches = total
+	r.Status = domain.RunRunning
+	r.LastError = ""
+	if e.ClearDemoFailure {
+		r.DemoFailAfter = nil
+	}
+	applyBatch(next, r, batch)
+	r.NextSeq++
+	more := r.NextSeq <= total
+	if !more {
+		finishRun(r, e.now())
+	}
+	if err := e.Store.Commit(next); err != nil {
+		return *r, false, err
+	}
+	if e.AfterBatch != nil {
+		e.AfterBatch(seq)
+	}
+	return *r, more, nil
+}
+
+func (e *Engine) complete(runID, total int) (domain.Run, bool, error) {
+	next := e.Store.State().Clone()
+	r := next.RunByID(runID)
+	if r.BatchesDone() != total {
+		interrupted, err := e.interrupt(runID, errors.New("not all batches were processed"))
+		return interrupted, false, err
+	}
+	finishRun(r, e.now())
+	if err := e.Store.Commit(next); err != nil {
+		return *r, false, err
+	}
+	return *r, false, nil
+}
+
+func finishRun(r *domain.Run, now time.Time) {
+	r.Status = domain.RunCompleted
+	if r.Counters.IssueCount > 0 {
+		r.Status = domain.RunCompletedWithIssues
+	}
+	r.FinishedAt = &now
 }
 
 func (e *Engine) now() time.Time {

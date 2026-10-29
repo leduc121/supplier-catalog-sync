@@ -30,8 +30,14 @@ func OpenFile(path string) (*FileClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	return OpenJSON(b)
+}
+
+// OpenJSON builds the fictional supplier client from embedded or uploaded-free data.
+// Keeping parsing here means the CLI and web server use exactly the same feed rules.
+func OpenJSON(b []byte) (*FileClient, error) {
 	var f feed
-	if err = json.Unmarshal(b, &f); err != nil {
+	if err := json.Unmarshal(b, &f); err != nil {
 		return nil, fmt.Errorf("read feed: %w", err)
 	}
 	if f.TotalBatches == 0 {
