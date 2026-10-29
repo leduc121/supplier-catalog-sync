@@ -1,0 +1,4 @@
+{"total_batches":3,"batches":[
+  {"seq":1,"records":[{"sku":"D1","name":"Socks","price_cents":1000,"status":"active","revision":1}]},
+  {"seq":2,"records":[{"sku":"D2","name":"Shirt","price_cents":2000,"status":"active","revision":1}]}
+]}

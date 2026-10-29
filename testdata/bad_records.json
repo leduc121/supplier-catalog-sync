@@ -1,0 +1,4 @@
+{"total_batches":2,"batches":[
+  {"seq":1,"records":[{"sku":"C1","name":"Belt","price_cents":7000,"status":"active","revision":1},{"sku":"","name":"Bad","price_cents":100,"status":"active","revision":1},{"sku":"C2","name":"Broken","price_cents":-5,"status":"active","revision":1}]},
+  {"seq":2,"records":[{"sku":"C3","name":"Thing","price_cents":100,"status":"discontinued","revision":1},{"sku":"C1","name":"Belt (different)","price_cents":7000,"status":"active","revision":1},{"sku":"C4","name":"Hat","price_cents":6000,"status":"active","revision":1}]}
+]}

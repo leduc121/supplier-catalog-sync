@@ -1,0 +1,5 @@
+{"total_batches":3,"batches":[
+  {"seq":1,"records":[{"sku":"B1","status":"withdrawn","revision":3},{"sku":"B2","name":"Scarf","price_cents":5000,"status":"active","revision":2}]},
+  {"seq":2,"records":[{"sku":"B1","name":"Boots","price_cents":90000,"status":"active","revision":2},{"sku":"B2","name":"Scarf","price_cents":5000,"status":"active","revision":2},{"sku":"B2","name":"Scarf","price_cents":4000,"status":"active","revision":1}]},
+  {"seq":3,"records":[{"sku":"B3","name":"Gloves","price_cents":3000,"status":"active","revision":1},{"sku":"B3","name":"Gloves","price_cents":3000,"status":"active","revision":1},{"sku":"B1","name":"Boots","price_cents":85000,"status":"active","revision":1}]}
+]}
